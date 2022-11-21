@@ -18,8 +18,12 @@ This project assumes you have CUDA support 11.6+ and use anaconda for python env
 $ git clone https://github.com/UTNuclearRoboticsPublic/rt_uq_semantic_segmentation
 ```
 2. Recreate the python environment
-```
+```bash
 $ conda env create -f environment.yml
 ```
-
-
+ 3. Install StochMan dependency in project directory
+ ```bash
+ $ git clone https://github.com/IlMioFrizzantinoAmabile/stochman
+ $ cd stochman
+ $ python setup.py install
+```
