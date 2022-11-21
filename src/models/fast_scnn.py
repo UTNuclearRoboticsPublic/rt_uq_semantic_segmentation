@@ -3,10 +3,6 @@
 
     This file creates the FastSCNN model architecture.
 """
-
-import os
-import sys
-sys.path.append(os.path.join(os.getcwd(), "stochman"))
 import torch
 import torch.nn as nn
 from stochman import nnj
@@ -23,9 +19,12 @@ class FastSCNN(nn.Module):
         self.num_classes = num_classes
 
         # Model layer sizing
-        self.dw_channels1 = 32
-        self.dw_channels2 = 64
-        self.out_channels = 128
+        img_h = img_w = 64
+        self.dw_channels1 = int(32/2)
+        self.dw_channels2 = int(64/2)
+        self.out_channels = int(128/2)
+        self.intermediate_channel = int(96/2)
+        t = int(6/2)
 
         """
         FastSCNN full architecture
@@ -37,70 +36,74 @@ class FastSCNN(nn.Module):
             nnj.Conv2d(self.dw_channels1, self.dw_channels1, 1, bias=False),
             nnj.Tanh(),
             nnj.Conv2d(self.dw_channels1, self.dw_channels2, 1, bias=False),
-            nnj.ReLU(),
+            nnj.Tanh(),
             nnj.Conv2d(self.dw_channels2, self.dw_channels2, 1, bias=False),
             nnj.Tanh(),
             nnj.Conv2d(self.dw_channels2, self.out_channels, 1, bias=False),
             nnj.Tanh(),
             nnj.Flatten(),
             nnj.SkipConnection(
-                nnj.Reshape(128,256,256),
+                nnj.Reshape(self.out_channels,img_h,img_h),
                 # 2. Global Feature Extractor:
                 #     a) linear bottle neck
-                nnj.Conv2d(128,64*6,1, bias=False),
+                nnj.Conv2d(self.out_channels,self.dw_channels2*t,1, bias=False),
                 nnj.Tanh(),
-                nnj.Conv2d(64*6,64*6,1, bias=False),
+                nnj.Conv2d(self.dw_channels2*t,self.dw_channels2*t,1, bias=False),
                 nnj.Tanh(),
-                nnj.Conv2d(64*6,64,1,bias=False),
+                nnj.Conv2d(self.dw_channels2*t,self.dw_channels2,1,bias=False),
                 #     b) linear bottle neck
-                nnj.Conv2d(64,96*6,1, bias=False),
+                nnj.Conv2d(self.dw_channels2,self.intermediate_channel*t,1, bias=False),
                 nnj.Tanh(),
-                nnj.Conv2d(96*6,96*6,1, bias=False),
+                nnj.Conv2d(self.intermediate_channel*t,self.intermediate_channel*t,1, bias=False),
                 nnj.Tanh(),
-                nnj.Conv2d(96*6,96,1,bias=False),
+                nnj.Conv2d(self.intermediate_channel*t,self.intermediate_channel,1,bias=False),
                 #     c) linear bottle neck
-                nnj.Conv2d(96,128*6,1, bias=False),
+                nnj.Conv2d(self.intermediate_channel,self.out_channels*t,1, bias=False),
                 nnj.Tanh(),
-                nnj.Conv2d(128*6,128*6,1, bias=False),
+                nnj.Conv2d(self.out_channels*t,self.out_channels*t,1, bias=False),
                 nnj.Tanh(),
-                nnj.Conv2d(128*6,128*6,1,bias=False),
-        #     #     # #     d) pyramid pooling layer -- Can't work w/ Sequential, needs 4 features
-        #     #     # # nnj.MaxPool2d(1),
-        #     #     # # nnj.Conv2d(128,128,1, bias=False), 
-        #     #     # # nnj.Upsample(scale_factor=2), # feature 1
-        #     #     # # nnj.MaxPool2d(2),
-        #     #     # # nnj.Conv2d(128,128,1, bias=False), 
-        #     #     # # nnj.Upsample(scale_factor=2),  # feature 2
-        #     #     # # nnj.MaxPool2d(3),
-        #     #     # # nnj.Conv2d(128,128,1, bias=False), 
-        #     #     # # nnj.Upsample(scale_factor=2), # feature 3
-                nnj.MaxPool2d(2),
+                nnj.Conv2d(self.out_channels*t,self.out_channels*t,1,bias=False),
+                #     d) pyramid pooling layer -- Can't work w/ Sequential, needs 4 features
+                nnj.MaxPool2d(1),
+                nnj.Conv2d(self.out_channels*t,self.out_channels,1, bias=False), 
+                nnj.Upsample(scale_factor=2), # feature 1
+                # nnj.MaxPool2d(2),
+                # nnj.Conv2d(128,128,1, bias=False), 
+                # nnj.Upsample(scale_factor=2),  # feature 2
+                # nnj.MaxPool2d(3),
+                # nnj.Conv2d(128,128,1, bias=False), 
+                # nnj.Upsample(scale_factor=2), # feature 3
+                # nnj.MaxPool2d(6),
                 # nnj.Conv2d(768,128,1, bias=False), 
-                # nnj.Upsample(scale_factor=2),      # feature 4
+                # nnj.Upsample(scale_factor=2), # feature 4
+
                 nnj.Flatten(),
                 add_hooks=True,
             ),
             # Skipping Feature fusion
             # 3. Feature Fusion:
-            nnj.Reshape(320,256,256),
+            nnj.Reshape(320,img_h,img_h),
+
             # # 4. Classifier
-            nnj.Conv2d(320,256,1),
+            nnj.Conv2d(320,img_h,1),
             nnj.Tanh(),
-            nnj.Conv2d(256,256,1),
+            nnj.Conv2d(img_h,img_h,1),
             nnj.Tanh(),
-            nnj.Conv2d(256,256,1),
-            nnj.Tanh(),
-
-            nnj.Conv2d(256,256,1),
-            nnj.Tanh(),
-            nnj.Conv2d(256,256,1),
+            nnj.Conv2d(img_h,img_h,1),
             nnj.Tanh(),
 
-            nnj.Conv2d(256,self.num_classes,1)
+            # nnj.Conv2d(128,128,1),
+            # nnj.Tanh(),
+            # nnj.Conv2d(128,128,1),
+            # nnj.Tanh(),
+
+            nnj.Conv2d(64,self.num_classes,1)
 
         )
 
-
+    # for line_profiler, uncomment @profile line
+    # run: $ kernprof -l -v fast_scnn.py
+    # @profile
     def forward(self, x):
         """
         Executes forward pass
@@ -108,8 +111,25 @@ class FastSCNN(nn.Module):
         return self.deterministic(x)
 
 
+def count_parameters(model):
+    """
+    returns the number of trainable parameters in a model
+    """
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 
 if __name__ == '__main__':
-    img = torch.randn(2, 3, 256, 256)
+    # create fake RGB image
+    img = torch.randn(2, 3, 64, 64)
+
+    # create the model
     model = FastSCNN()
+
+    # print model summary
+    print(model)
+
+    # print model trainable parameter size
+    print(count_parameters(model))
+
+    # print output shape
     print(model(img).shape)
